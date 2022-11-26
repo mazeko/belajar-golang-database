@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -82,5 +83,86 @@ func TestQuerySelect(t *testing.T) {
 		fmt.Println("BirthDate: ", birthDate)
 		fmt.Println("Married: ", married)
 		fmt.Println("CreatedAt: ", createdAt)
+	}
+}
+
+func TestSqlInjection(t *testing.T) {
+	db := GetConnection()
+	defer db.Close()
+
+	ctx := context.Background()
+	username := "admin'; #"
+	password := "admin"
+
+	// Not Secure
+	// script := "SELECT username FROM users WHERE username = '" + username + "' AND password = '" + password + "'"
+
+	// Secure
+	script := "SELECT username FROM users WHERE username = ? AND password = ?"
+	rows, err := db.QueryContext(ctx, script, username, password)
+	if err != nil {
+		panic(err)
+	}
+
+	if rows.Next() {
+		var username string
+		err := rows.Scan(&username)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("Hallo ", username)
+	} else {
+		fmt.Println("Gagal")
+	}
+}
+
+func TestGetLastInserted(t *testing.T) {
+	db := GetConnection()
+	defer db.Close()
+
+	email := "eko@gmail.com"
+	comment := "comments"
+
+	ctx := context.Background()
+	script := "INSERT INTO comments(email, comment) VALUES(?,?)"
+	result, err := db.ExecContext(ctx, script, email, comment)
+	if err != nil {
+		panic(err)
+	}
+
+	insertId, err := result.LastInsertId()
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Success With ID = ", insertId)
+}
+
+func TestPrepareStatement(t *testing.T) {
+	db := GetConnection()
+	defer db.Close()
+
+	ctx := context.Background()
+	script := "INSERT INTO comments(email, comment) VALUES(?, ?)"
+	statement, err := db.PrepareContext(ctx, script)
+	if err != nil {
+		panic(err)
+	}
+
+	defer statement.Close()
+
+	for i := 1; i <= 10; i++ {
+		email := "User" + strconv.Itoa(i) + "@gmail.com"
+		comment := "Komentar ke " + strconv.Itoa(i)
+		result, err := statement.ExecContext(ctx, email, comment)
+		if err != nil {
+			panic(err)
+		}
+
+		id, err := result.LastInsertId()
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("Comment ID ", id)
 	}
 }
